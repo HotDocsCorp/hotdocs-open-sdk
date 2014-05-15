@@ -54,7 +54,7 @@ namespace HotDocs.Sdk.Server
 		/// HotDocs Server with which the host app is communicating.</param>
 		/// <param name="template">The template upon which this WorkSession is based. The initial interview and/or
 		/// document work items in the WorkSession will be based on this template (including its Switches property).</param>
-		public WorkSession(IServices service, Template template) : this(service, template, null) { }
+		public WorkSession(IServices service, Template template) : this(service, template, null, null) { }
 
 		/// <summary>
 		/// Creates a WorkSession object that a host application can use to step through the process of presenting
@@ -67,21 +67,7 @@ namespace HotDocs.Sdk.Server
 		/// <param name="answers">A collection of XML answers to use as a starting point for the work session.
 		/// The initial interview (if any) will be pre-populated with these answers, and the subsequent generation
 		/// of documents will have access to these answers as well.</param>
-		public WorkSession(IServices service, Template template, TextReader answers)
-		{
-			_service = service;
-			AnswerCollection = new AnswerCollection();
-			if (answers != null)
-				AnswerCollection.ReadXml(answers);
-			DefaultAssemblySettings = new AssembleDocumentSettings();
-			DefaultInterviewSettings = new InterviewSettings();
-			// add the work items
-			_workItems = new List<WorkItem>();
-			if (template.HasInterview)
-				_workItems.Add(new InterviewWorkItem(template));
-			if (template.GeneratesDocument)
-				_workItems.Add(new DocumentWorkItem(template));
-		}
+		public WorkSession(IServices service, Template template, TextReader answers) : this(service, template, answers, null) {}
         /// <summary>
         /// Creates a WorkSession object that a host application can use to step through the process of presenting
         /// all the interviews and assembling all the documents that may result from the given template.
@@ -103,9 +89,11 @@ namespace HotDocs.Sdk.Server
             if (answers != null)
                 AnswerCollection.ReadXml(answers);
             DefaultAssemblySettings = new AssembleDocumentSettings();
-            DefaultInterviewSettings = defaultInterviewSettings;
-            InterviewSettings.Default = defaultInterviewSettings;
-            // add the work items
+				if (defaultInterviewSettings != null)
+					DefaultInterviewSettings = defaultInterviewSettings;
+				else
+					DefaultInterviewSettings = new InterviewSettings();
+				// add the work items
             _workItems = new List<WorkItem>();
             if (template.HasInterview)
                 _workItems.Add(new InterviewWorkItem(template));
