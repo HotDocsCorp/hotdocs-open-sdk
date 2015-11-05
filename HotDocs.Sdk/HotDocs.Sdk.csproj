@@ -88,6 +88,7 @@
     <Compile Include="PackagePathTemplateLocation.cs" />
     <Compile Include="PackageTemplateLocation.cs" />
     <Compile Include="PathTemplateLocation.cs" />
+    <Compile Include="RetrieveFromHub.cs" />
     <Compile Include="Settings.cs" />
     <Compile Include="StreamSplitter.cs" />
     <Compile Include="Template.cs" />

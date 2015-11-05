@@ -38,13 +38,6 @@ namespace HotDocs.Sdk.Cloud
     /// </summary>
     public sealed partial class RestClient : ClientBase, IDisposable
     {
-        #region Private fields
-
-        private readonly string _defaultOutputDir = Path.GetTempPath();
-        private MultipartMimeParser _parser = new MultipartMimeParser();
-
-        #endregion
-
         #region Constructors
 
         /// <summary>
@@ -55,11 +48,13 @@ namespace HotDocs.Sdk.Cloud
             string signingKey,
             string outputDir = null,
             string hostAddress = null,
-            string proxyServerAddress = null)
+            string proxyServerAddress = null,
+            RetrieveFromHub retrieveFromHub = RetrieveFromHub.No)
             : base(subscriberId, signingKey, hostAddress, "RestfulSvc.svc", proxyServerAddress)
         {
             OutputDir = outputDir ?? _defaultOutputDir;
             SetTcpKeepAlive();
+            _retrieveFromHub = retrieveFromHub;
 
 #if DEBUG
             // For debug builds, allow invalid server certificates.
@@ -75,6 +70,94 @@ namespace HotDocs.Sdk.Cloud
         ///     The name of the folder where output files will get created.
         /// </summary>
         public string OutputDir { get; set; }
+
+        #endregion
+
+        #region Dispose methods
+
+        /// <summary>
+        /// </summary>
+        public void Dispose() // Since this class is sealed, we don't need to implement the full dispose pattern.
+        {
+            if (_parser != null)
+            {
+                _parser.Dispose();
+                _parser = null;
+            }
+        }
+
+        #endregion
+
+        #region Private static methods
+
+        private static Dictionary<string, string> GetOutputOptionsPairs(OutputOptions outputOptions)
+        {
+            var pairs = new Dictionary<string, string>();
+
+            var basic = (BasicOutputOptions) outputOptions;
+            pairs.AddIfNotNull("Author", basic.Author);
+            pairs.AddIfNotNull("Comments", basic.Comments);
+            pairs.AddIfNotNull("Company", basic.Company);
+            pairs.AddIfNotNull("Keywords", basic.Keywords);
+            pairs.AddIfNotNull("Subject", basic.Subject);
+            pairs.AddIfNotNull("Title", basic.Title);
+
+            if (outputOptions is PdfOutputOptions)
+            {
+                var pdf = (PdfOutputOptions) outputOptions;
+                pairs.AddIfNotNull("EmbedFonts", pdf.EmbedFonts);
+                pairs.AddIfNotNull("PdfA", pdf.PdfA);
+                pairs.AddIfNotNull("TaggedPdf", pdf.TaggedPdf);
+                pairs.AddIfNotNull("KeepFillablePdf", pdf.KeepFillablePdf);
+                pairs.AddIfNotNull("TruncateFields", pdf.TruncateFields);
+                pairs.AddIfNotNull("Permissions", pdf.Permissions);
+                pairs.AddIfNotNull("OwnerPassword", pdf.OwnerPassword);
+                pairs.AddIfNotNull("UserPassword", pdf.UserPassword);
+            }
+            else if (outputOptions is HtmlOutputOptions)
+            {
+                pairs.AddIfNotNull("Encoding", ((HtmlOutputOptions) outputOptions).Encoding);
+            }
+            else if (outputOptions is TextOutputOptions)
+            {
+                pairs.AddIfNotNull("Encoding", ((TextOutputOptions) outputOptions).Encoding);
+            }
+
+            return pairs;
+        }
+
+        #endregion
+
+        #region Private methods
+
+        private static string GetFileNameFromHeaders(Dictionary<string, string> headers)
+        {
+            string disp;
+
+            if (!headers.TryGetValue("Content-Disposition", out disp)) return null;
+
+            var pairs = disp.Split(';');
+
+            foreach (var pair in pairs)
+            {
+                var trimmed = pair.Trim();
+
+                if (!trimmed.StartsWith("filename*=")) continue;
+
+                var endPos = trimmed.IndexOf("'", StringComparison.Ordinal);
+
+                return trimmed.Substring(endPos + 2);
+            }
+            return null;
+        }
+
+        #endregion
+
+        #region Private fields
+
+        private readonly string _defaultOutputDir = Path.GetTempPath();
+        private MultipartMimeParser _parser = new MultipartMimeParser();
+        private readonly RetrieveFromHub _retrieveFromHub;
 
         #endregion
 
@@ -129,9 +212,9 @@ namespace HotDocs.Sdk.Cloud
         {
             try
             {
-                DateTime timestamp = DateTime.UtcNow;
+                var timestamp = DateTime.UtcNow;
 
-                string hmac = HMAC.CalculateHMAC(
+                var hmac = HMAC.CalculateHMAC(
                     SigningKey,
                     timestamp,
                     SubscriberId,
@@ -187,9 +270,9 @@ namespace HotDocs.Sdk.Cloud
         /// <returns></returns>
         public IEnumerable<string> GetThemeList(string prefix, string billingRef)
         {
-            DateTime timestamp = DateTime.UtcNow;
+            var timestamp = DateTime.UtcNow;
 
-            string hmac = HMAC.CalculateHMAC(
+            var hmac = HMAC.CalculateHMAC(
                 SigningKey,
                 timestamp,
                 SubscriberId,
@@ -247,9 +330,9 @@ namespace HotDocs.Sdk.Cloud
         /// <returns></returns>
         public Stream GetThemeFile(string themeFileName, string billingRef)
         {
-            DateTime timestamp = DateTime.UtcNow;
+            var timestamp = DateTime.UtcNow;
 
-            string hmac = HMAC.CalculateHMAC(
+            var hmac = HMAC.CalculateHMAC(
                 SigningKey,
                 timestamp,
                 SubscriberId,
@@ -286,8 +369,8 @@ namespace HotDocs.Sdk.Cloud
         /// <param name="billingRef"></param>
         public void GetThemeFile(string themeFileName, string localFilePath, string billingRef)
         {
-            using (Stream stream = GetThemeFile(themeFileName, billingRef))
-            using (FileStream fileStream = File.OpenWrite(localFilePath))
+            using (var stream = GetThemeFile(themeFileName, billingRef))
+            using (var fileStream = File.OpenWrite(localFilePath))
             {
                 stream.CopyTo(fileStream);
             }
@@ -301,9 +384,9 @@ namespace HotDocs.Sdk.Cloud
         /// <param name="billingRef"></param>
         public void PutThemeFile(string themeFileName, Stream stream, string billingRef)
         {
-            DateTime timestamp = DateTime.UtcNow;
+            var timestamp = DateTime.UtcNow;
 
-            string hmac = HMAC.CalculateHMAC(
+            var hmac = HMAC.CalculateHMAC(
                 SigningKey,
                 timestamp,
                 SubscriberId,
@@ -345,7 +428,7 @@ namespace HotDocs.Sdk.Cloud
         /// <param name="billingRef"></param>
         public void PutThemeFile(string themeFileName, string localFilePath, string billingRef)
         {
-            using (FileStream stream = File.Open(localFilePath, FileMode.Open))
+            using (var stream = File.Open(localFilePath, FileMode.Open))
             {
                 PutThemeFile(themeFileName, stream, billingRef);
             }
@@ -358,9 +441,9 @@ namespace HotDocs.Sdk.Cloud
         /// <param name="billingRef"></param>
         public void DeleteTheme(string themeName, string billingRef)
         {
-            DateTime timestamp = DateTime.UtcNow;
+            var timestamp = DateTime.UtcNow;
 
-            string hmac = HMAC.CalculateHMAC(
+            var hmac = HMAC.CalculateHMAC(
                 SigningKey,
                 timestamp,
                 SubscriberId,
@@ -399,9 +482,9 @@ namespace HotDocs.Sdk.Cloud
         /// <param name="billingRef"></param>
         public void RenameTheme(string themeName, string newThemeName, string billingRef)
         {
-            DateTime timestamp = DateTime.UtcNow;
+            var timestamp = DateTime.UtcNow;
 
-            string hmac = HMAC.CalculateHMAC(
+            var hmac = HMAC.CalculateHMAC(
                 SigningKey,
                 timestamp,
                 SubscriberId,
@@ -436,46 +519,6 @@ namespace HotDocs.Sdk.Cloud
 
         #endregion
 
-        #region Private static methods
-
-        private static Dictionary<string, string> GetOutputOptionsPairs(OutputOptions outputOptions)
-        {
-            var pairs = new Dictionary<string, string>();
-
-            var basic = (BasicOutputOptions) outputOptions;
-            pairs.AddIfNotNull("Author", basic.Author);
-            pairs.AddIfNotNull("Comments", basic.Comments);
-            pairs.AddIfNotNull("Company", basic.Company);
-            pairs.AddIfNotNull("Keywords", basic.Keywords);
-            pairs.AddIfNotNull("Subject", basic.Subject);
-            pairs.AddIfNotNull("Title", basic.Title);
-
-            if (outputOptions is PdfOutputOptions)
-            {
-                var pdf = (PdfOutputOptions) outputOptions;
-                pairs.AddIfNotNull("EmbedFonts", pdf.EmbedFonts);
-                pairs.AddIfNotNull("PdfA", pdf.PdfA);
-                pairs.AddIfNotNull("TaggedPdf", pdf.TaggedPdf);
-                pairs.AddIfNotNull("KeepFillablePdf", pdf.KeepFillablePdf);
-                pairs.AddIfNotNull("TruncateFields", pdf.TruncateFields);
-                pairs.AddIfNotNull("Permissions", pdf.Permissions);
-                pairs.AddIfNotNull("OwnerPassword", pdf.OwnerPassword);
-                pairs.AddIfNotNull("UserPassword", pdf.UserPassword);
-            }
-            else if (outputOptions is HtmlOutputOptions)
-            {
-                pairs.AddIfNotNull("Encoding", ((HtmlOutputOptions) outputOptions).Encoding);
-            }
-            else if (outputOptions is TextOutputOptions)
-            {
-                pairs.AddIfNotNull("Encoding", ((TextOutputOptions) outputOptions).Encoding);
-            }
-
-            return pairs;
-        }
-
-        #endregion
-
         #region Protected internal implementations of abstract methods from the base class
 
         /// <summary>
@@ -503,9 +546,9 @@ namespace HotDocs.Sdk.Cloud
                         return func(true);
                     }
 
-                    using (Stream stream = httpResponse.GetResponseStream())
+                    using (var stream = httpResponse.GetResponseStream())
                     {
-                        string message = new StreamReader(stream).ReadToEnd();
+                        var message = new StreamReader(stream).ReadToEnd();
                         if (message == "")
                         {
                             // No error message, so rethrow.
@@ -553,9 +596,9 @@ namespace HotDocs.Sdk.Cloud
                 UploadPackage(packageTemplateLocation.PackageID, billingRef, packageTemplateLocation.GetPackageStream());
             }
 
-            DateTime timestamp = DateTime.UtcNow;
+            var timestamp = DateTime.UtcNow;
 
-            string hmac = HMAC.CalculateHMAC(
+            var hmac = HMAC.CalculateHMAC(
                 SigningKey,
                 timestamp,
                 SubscriberId,
@@ -567,9 +610,9 @@ namespace HotDocs.Sdk.Cloud
                 settings.Settings);
 
             var urlBuilder = new StringBuilder(string.Format(
-                "{0}/assemble/{1}/{2}/{3}?format={4}&billingref={5}&encodeFileNames={6}",
+                "{0}/assemble/{1}/{2}/{3}?format={4}&billingref={5}&encodeFileNames={6}&retrievefromhub={7}",
                 EndpointAddress, SubscriberId, packageTemplateLocation.PackageID, template.FileName ?? "",
-                settings.Format, billingRef,true));
+                settings.Format, billingRef, true, _retrieveFromHub));
 
             if (settings.Settings != null)
             {
@@ -583,7 +626,7 @@ namespace HotDocs.Sdk.Cloud
             // be extremely long.  Consumers should be aware that overly-long URLs could be rejected
             // by Cloud Services.  If the Comments and/or Keywords values cannot be truncated, the
             // consumer should use the SOAP version of the client.
-            Dictionary<string, string> outputOptionsPairs = GetOutputOptionsPairs(settings.OutputOptions);
+            var outputOptionsPairs = GetOutputOptionsPairs(settings.OutputOptions);
 
             foreach (var kv in outputOptionsPairs)
             {
@@ -605,7 +648,7 @@ namespace HotDocs.Sdk.Cloud
 
             if (answers != null)
             {
-                byte[] data = Encoding.UTF8.GetBytes(answers);
+                var data = Encoding.UTF8.GetBytes(answers);
                 request.GetRequestStream().Write(data, 0, data.Length);
             }
             var response = (HttpWebResponse) request.GetResponse();
@@ -620,7 +663,7 @@ namespace HotDocs.Sdk.Cloud
                     response.GetResponseStream(),
                     h =>
                     {
-                        string fileName = GetFileNameFromHeaders(h);
+                        var fileName = GetFileNameFromHeaders(h);
                         if (fileName != null)
                         {
                             if (fileName.Equals("meta0.xml", StringComparison.OrdinalIgnoreCase))
@@ -677,9 +720,9 @@ namespace HotDocs.Sdk.Cloud
                 UploadPackage(packageTemplateLocation.PackageID, billingRef, packageTemplateLocation.GetPackageStream());
             }
 
-            DateTime timestamp = DateTime.UtcNow;
+            var timestamp = DateTime.UtcNow;
 
-            string interviewImageUrl = string.Empty;
+            var interviewImageUrl = string.Empty;
             if (settings != null)
             {
                 settings.Settings.TryGetValue("TempInterviewUrl", out interviewImageUrl);
@@ -689,7 +732,7 @@ namespace HotDocs.Sdk.Cloud
                 settings = new InterviewSettings();
             }
 
-            string hmac = HMAC.CalculateHMAC(
+            var hmac = HMAC.CalculateHMAC(
                 SigningKey,
                 timestamp,
                 SubscriberId,
@@ -702,10 +745,10 @@ namespace HotDocs.Sdk.Cloud
                 settings.Settings);
 
             var urlBuilder = new StringBuilder(string.Format(
-                "{0}/interview/{1}/{2}/{3}?format={4}&markedvariables={5}&tempimageurl={6}&billingref={7}&encodeFileNames={8}",
+                "{0}/interview/{1}/{2}/{3}?format={4}&markedvariables={5}&tempimageurl={6}&billingref={7}&encodeFileNames={8}&retrievefromhub={9}",
                 EndpointAddress, SubscriberId, packageTemplateLocation.PackageID, template.FileName, settings.Format,
                 settings.MarkedVariables != null ? string.Join(",", settings.MarkedVariables) : null, interviewImageUrl,
-                billingRef, true));
+                billingRef, true, _retrieveFromHub));
 
             if (settings.Settings != null)
             {
@@ -727,11 +770,11 @@ namespace HotDocs.Sdk.Cloud
                 request.Proxy = new WebProxy(ProxyServerAddress);
             }
 
-            using (Stream stream = request.GetRequestStream())
+            using (var stream = request.GetRequestStream())
             {
                 if (answers != null)
                 {
-                    byte[] data = Encoding.UTF8.GetBytes(answers);
+                    var data = Encoding.UTF8.GetBytes(answers);
                     stream.Write(data, 0, data.Length);
                 }
             }
@@ -748,7 +791,7 @@ namespace HotDocs.Sdk.Cloud
                         response.GetResponseStream(),
                         h =>
                         {
-                            string id = GetFileNameFromHeaders(h);
+                            var id = GetFileNameFromHeaders(h);
                             if (id != null)
                             {
                                 if (id.Equals("meta0.xml", StringComparison.OrdinalIgnoreCase))
@@ -805,8 +848,8 @@ namespace HotDocs.Sdk.Cloud
                 UploadPackage(packageTemplateLocation.PackageID, billingRef, packageTemplateLocation.GetPackageStream());
             }
 
-            DateTime timestamp = DateTime.UtcNow;
-            string hmac = HMAC.CalculateHMAC(
+            var timestamp = DateTime.UtcNow;
+            var hmac = HMAC.CalculateHMAC(
                 SigningKey,
                 timestamp,
                 SubscriberId,
@@ -817,9 +860,9 @@ namespace HotDocs.Sdk.Cloud
                 includeDialogs);
 
             var urlBuilder = new StringBuilder(string.Format(
-                "{0}/componentinfo/{1}/{2}/{3}?includedialogs={4}&billingref={5}",
+                "{0}/componentinfo/{1}/{2}/{3}?includedialogs={4}&billingref={5}&retrievefromhub={6}",
                 EndpointAddress, SubscriberId, packageTemplateLocation.PackageID, template.FileName, includeDialogs,
-                billingRef));
+                billingRef, _retrieveFromHub));
 
             var request = (HttpWebRequest) WebRequest.Create(urlBuilder.ToString());
             request.Method = "GET";
@@ -851,46 +894,6 @@ namespace HotDocs.Sdk.Cloud
         protected internal override BinaryObject GetAnswersImpl(BinaryObject[] answers, string billingRef)
         {
             throw new NotImplementedException(); // The REST client does not support GetAnswers.
-        }
-
-        #endregion
-
-        #region Dispose methods
-
-        /// <summary>
-        /// </summary>
-        public void Dispose() // Since this class is sealed, we don't need to implement the full dispose pattern.
-        {
-            if (_parser != null)
-            {
-                _parser.Dispose();
-                _parser = null;
-            }
-        }
-
-        #endregion
-
-        #region Private methods
-
-        private static string GetFileNameFromHeaders(Dictionary<string, string> headers)
-        {
-            string disp;
-
-            if (!headers.TryGetValue("Content-Disposition", out disp)) return null;
-
-            string[] pairs = disp.Split(';');
-
-            foreach (string pair in pairs)
-            {
-                string trimmed = pair.Trim();
-
-                if (!trimmed.StartsWith("filename*=")) continue;
-
-                int endPos = trimmed.IndexOf("'", StringComparison.Ordinal);
-
-                return trimmed.Substring(endPos + 2);
-            }
-            return null;
         }
 
         #endregion

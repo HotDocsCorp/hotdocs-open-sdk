@@ -11,6 +11,7 @@ using HotDocs.Sdk.Server.Contracts;
 
 namespace HotDocs.Sdk.Server.OnPremise
 {
+    [Obsolete("Please use HotDocsService instead")]
     public class OnPremiseServices : IServices
     {
         public OnPremiseServices(string hostAddress)
