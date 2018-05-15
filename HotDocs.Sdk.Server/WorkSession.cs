@@ -271,10 +271,14 @@ namespace HotDocs.Sdk.Server
 					if (postAssembleDocument != null)
 						postAssembleDocument(docWorkItem.Template, asmResult, userState);
 
-					// replace the session answers with the post-assembly answers
-					AnswerCollection.ReadXml(asmResult.Answers);
-					// add pendingAssemblies to the queue as necessary
-					InsertNewWorkItems(asmResult.PendingAssemblies, itemIndex);
+                    // replace the session answers with the post-assembly answers
+                    // Do not process XML until all assemblies have completed; answers will be incorrectly unanswered if the 'Save answers in answer file' option is unchecked.
+                    if (asmResult.PendingAssembliesCount == 0)
+                    {
+                        AnswerCollection.ReadXml(asmResult.Answers);
+                    }
+                    // add pendingAssemblies to the queue as necessary
+                    InsertNewWorkItems(asmResult.PendingAssemblies, itemIndex);
 					// store UnansweredVariables in the DocumentWorkItem
 					docWorkItem.UnansweredVariables = asmResult.UnansweredVariables;
 					// add an appropriate Document to a list being compiled for the return value of this method
