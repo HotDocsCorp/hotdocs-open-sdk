@@ -1,4 +1,4 @@
-![Legacy Product — No Longer Supported](https://place-hold.it/540x50/FFFFFF/f03c15?text=Legacy%20Product%20-%20No%20Longer%20Supported&bold&fontsize=24)
+![Legacy Product — No Longer Supported](https://place-hold.it/546x50/FFFFFF/f03c15?text=Legacy%20Product%20%e2%80%94%20No%20Longer%20Supported&fontsize=24)
 ---------------------------------------------
 
 HotDocs Open SDK
