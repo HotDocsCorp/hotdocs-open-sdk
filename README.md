@@ -1,3 +1,6 @@
+![Legacy Product — No Longer Supported](https://place-hold.it/540x50/FFFFFF/f03c15?text=Legacy%20Product%20-%20No%20Longer%20Supported&bold&fontsize=24)
+---------------------------------------------
+
 HotDocs Open SDK
 ================
 The HotDocs Open SDK is a toolkit designed to ease integration between 3rd party applications and HotDocs.
